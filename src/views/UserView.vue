@@ -79,7 +79,7 @@ let apiMethods = {
     },
     
     createSubUserByXlsx(body:any, callback:Function) {
-      this.request("POST", backendBaseUri + apiUris.importSubusersFormXlsx(currentSheet.id), body).then(
+      this.request("POST", backendBaseUri + apiUris.importSubusersFormXlsx(currentSheet.value.id), body).then(
         (resp) => {
           if (resp.status === 200) {
             callback(true)
