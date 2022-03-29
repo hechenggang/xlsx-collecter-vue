@@ -22,17 +22,16 @@ import {
   NMessageProvider,
   useMessage,
   NTime,
-
+  NTable,
 } from 'naive-ui'
 import { ArchiveOutline as ArchiveIcon } from '@vicons/ionicons5'
 import { useRouter,useRoute } from 'vue-router'
 import { computed } from '@vue/reactivity'
-import type { List } from 'lodash'
 
 const router = useRouter()
 
 
-let apiCode = computed(() =>  localStorage.getItem("x-api-code"))
+let apiCode = () => localStorage.getItem("x-api-subuser-code") || ""
 let backendBaseUri = "https://xlsx-collecter-api.imhcg.cn"
 let apiUris = {
   "loginByAccount": "https://account.imhcg.cn/to/aae1cf3cb358fab3f0685775655dc000",
@@ -42,16 +41,24 @@ let apiUris = {
     return `/api/user/${sheet_id}/subusers/import`
   }
 }
-let sheets= ref([])
-let currentSheet = ref<Object>({})
+let currentSheet = ref<Record<string,string>>({})
+
+let sheets= ref<Record<string,string>[]>([])
+
+// 把一个值转为字符串，显得没有那么多类型错误
+function toString<T>(raw:T): string {
+  return String(raw)
+}
 
 let apiMethods = {
+  
     request(method = "GET", url = "http://", body = undefined):Promise<Response> {
+      let headers:Record<string,string>  = {
+          "x-api-code": apiCode() || "apiCode"
+        }
       return fetch(url, {
         method: method,
-        headers: {
-          "x-api-code": apiCode.value
-        },
+        headers: headers,
         body: body,
         mode: "cors",
       })
@@ -59,9 +66,9 @@ let apiMethods = {
     checkLocalApiCode() {
       const route = useRoute()
       if (route.query.code && route.query.code.length === 129) {
-        localStorage.setItem("x-api-code", route.query.code)
+        localStorage.setItem("x-api-code", toString(route.query.code))
       } else {
-        if (apiCode.value == undefined) {
+        if (apiCode() == "") {
           location.assign(apiUris.loginByAccount)
         }
       }
@@ -125,7 +132,7 @@ const columns = [
   {
     title: '名称',
     key: 'title',
-    render(row: object) {
+    render(row: Record<string,string>) {
       return h(
         NButton,
         {
@@ -205,6 +212,7 @@ function handleFile(file, filelist, e) {
 
     }
   })
+  return true
 }
 
 

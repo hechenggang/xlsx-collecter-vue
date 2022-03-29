@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import { h, ref, watchEffect, onMounted } from 'vue'
+import { h, ref, onMounted } from 'vue'
 
 import {
   NButton,
@@ -26,7 +26,6 @@ import {
   NModal,
   NForm,
   NFormItem,
-
 } from 'naive-ui'
 
 import type { FormInst } from 'naive-ui'
@@ -56,7 +55,7 @@ const uri = {
   deleteRowFromDb(sheet_id: string, row_id: string) {
     return `/api/sheet/${sheet_id}/row/${row_id}/delete`
   },
-  outputToXlsxFile(sheet_id: string, row_id: string){
+  outputToXlsxFile(sheet_id: string, row_id: string) {
     return `/api/sheet/${sheet_id}/rows/${row_id}/xlsx`
   }
 
@@ -72,9 +71,9 @@ let subUser = ref({
 let currentRows = ref([])
 let rawRows = ref([])
 let rawColumns = ref([])
-let currentRow = ref({})
-let drawerColumns = ref([])
-let tableColumns = ref([])
+let currentRow = ref<Record<string, string>>({})
+let drawerColumns = ref<Record<string, string>[]>([])
+let tableColumns = ref<Record<string, string>[]>([])
 let visible = ref({
   subUserLoginVisible: false,
   createNewRowDrawerVisible: false,
@@ -85,20 +84,25 @@ let drawerTitle = ref("")
 const router = useRouter()
 const message = useMessage()
 
-let apiCode = () => localStorage.getItem("x-api-subuser-code")
+let apiCode = () => localStorage.getItem("x-api-subuser-code") || ""
 
-// 检查本地是否有 x-api-subuser-code 缓存
+// 把一个值转为字符串，显得没有那么多类型错误
+function toString<T>(raw: T): string {
+  return String(raw)
+}
 
 
 let apiMethods = {
 
-  request(method: string = "GET", url: string = "http://", body = undefined, content_type: string = "application/json") {
+  request(method: string = "GET", url: string = "http://", body: any = undefined, content_type: string = "application/json") {
+    let headers: Record<string, string> = {
+      "x-api-code": apiCode(),
+      "content-type": content_type
+    }
+
     return fetch(url, {
       method: method,
-      headers: {
-        "x-api-subuser-code": apiCode(),
-        "content-type": content_type
-      },
+      headers: headers,
       body: body,
       mode: "cors",
     })
@@ -112,7 +116,7 @@ let apiMethods = {
   checkSheetIdAndApiCode() {
     const route = useRoute()
     if (route.query.sheet_id && route.query.sheet_id.length == 32) {
-      sheetId.value = route.query.sheet_id
+      sheetId.value = toString(route.query.sheet_id)
       console.log("checkSheetIdAndApiCode", sheetId)
     } else {
       location.assign("/")
@@ -179,7 +183,7 @@ let apiMethods = {
           rawColumns = data
 
           // 整理原始字段为 naive-ui Table 接受的字段 
-          let temp = []
+          let temp: any[] = []
           Object.keys(data).forEach((key) => {
             temp.push({
               "key": key,
@@ -191,9 +195,9 @@ let apiMethods = {
           // 增加编辑按钮
           const vnode = {
             title: '操作',
-            render(row: object) {
+            render(row: Record<string, string>) {
 
-              let btns = []
+              let btns: any[] = []
               const editButton = h(
                 NButton,
                 {
@@ -232,7 +236,7 @@ let apiMethods = {
                     }
                   }
                 },
-                
+
                 { default: () => "删除" }
               )
 
@@ -248,16 +252,16 @@ let apiMethods = {
                     currentRow.value = row
 
                     // const ok = confirm("确认删除吗?")
-                    
+
                     apiMethods.outputToXlsxFile()
-                
+
                   }
                 },
-                
+
                 { default: () => "To Xlsx" }
               )
-              
-              btns.push([editButton, deleteButton,outputXlsxButton])
+
+              btns.push([editButton, deleteButton, outputXlsxButton])
               return btns
             }
           }
@@ -310,17 +314,17 @@ let apiMethods = {
     apiMethods.request("GET", backendBaseUri + uri.outputToXlsxFile(sheetId.value, currentRow.value.rowid), undefined, "application/json").then((resp) => {
       if (resp.status == 200) {
         // let blob = new Blob([resp.blob()], {type: resp.headers["content-type"]});
-        resp.blob().then((blob)=>{
+        resp.blob().then((blob) => {
           let objectUrl = URL.createObjectURL(blob);
           let link = document.createElement('a');
           link.style.display = "none";
           link.href = objectUrl;
-          link.download = '导出数据-'+ currentRow.value[Object.keys(currentRow.value)[1]] +'.xlsx';
+          link.download = '导出数据-' + currentRow.value[Object.keys(currentRow.value)[1]] + '.xlsx';
           link.click();
           URL.revokeObjectURL(objectUrl);
           document.body.removeChild(link);
         })
-        
+
       }
     })
   },
@@ -347,8 +351,10 @@ const rules = {
 
 const formRef = ref<FormInst | null>(null)
 
+const handleValidateLoading = ref(false)
 function handleValidateClick(e: MouseEvent) {
   e.preventDefault()
+  handleValidateLoading.value = true
   formRef.value?.validate((errors) => {
     if (!errors) {
       console.log("尝试登录")
@@ -356,9 +362,13 @@ function handleValidateClick(e: MouseEvent) {
         if (ok) {
           message.success('登录成功')
           visible.value.subUserLoginVisible = false
+          handleValidateLoading.value = false
+
           apiMethods.getSubUserColumns()
           apiMethods.getSubUserRows()
         } else {
+          handleValidateLoading.value = false
+
           message.error('登录失败')
         }
       })
@@ -371,16 +381,21 @@ function handleValidateClick(e: MouseEvent) {
   })
 }
 
+const saveRowLoading = ref(false)
 
 function saveRow() {
+  saveRowLoading.value = true
   if (drawerTitle.value == '新增') {
 
     apiMethods.insertRow((ok: boolean) => {
       if (ok) {
         message.success('新增成功')
         visible.value.createNewRowDrawerVisible = false
+        saveRowLoading.value = false
+
         apiMethods.getSubUserRows()
       } else {
+        saveRowLoading.value = false
         message.error('新增失败 请联系管理员')
       }
     })
@@ -391,8 +406,11 @@ function saveRow() {
       if (ok) {
         message.success('更新成功')
         visible.value.createNewRowDrawerVisible = false
+        saveRowLoading.value = false
+
         apiMethods.getSubUserRows()
       } else {
+        saveRowLoading.value = false
         message.error('更新失败 请联系管理员')
       }
     })
@@ -432,7 +450,11 @@ onMounted(() => {
         </n-form-item>
 
         <n-form-item>
-          <n-button attr-type="button" @click="handleValidateClick">验证</n-button>
+          <n-button
+            attr-type="button"
+            :loading="handleValidateLoading"
+            @click="handleValidateClick"
+          >验证</n-button>
         </n-form-item>
       </n-form>
     </n-card>
@@ -447,14 +469,8 @@ onMounted(() => {
           >新增数据</n-button>
         </n-button-group>
 
-        <n-button-group style="margin-bottom: 12px;" >
-          
-          <n-button
-            @click="apiMethods.resetLoginStatus"
-          >注销 {{ subUser.name() }}</n-button>
-
-          
-          
+        <n-button-group style="margin-bottom: 12px;">
+          <n-button @click="apiMethods.resetLoginStatus">注销 {{ subUser.name() }}</n-button>
         </n-button-group>
       </n-space>
 
@@ -477,9 +493,9 @@ onMounted(() => {
         </n-form-item>
 
         <n-button-group style="margin-bottom: 12px;">
-          <n-button v-if="drawerTitle == '新增'" @click="saveRow">新增</n-button>
+          <n-button v-if="drawerTitle == '新增'" :loading="saveRowLoading" @click="saveRow">新增</n-button>
 
-          <n-button v-if="drawerTitle == '更新'" @click="saveRow">更新</n-button>
+          <n-button v-if="drawerTitle == '更新'"  :loading="saveRowLoading"  @click="saveRow">更新</n-button>
         </n-button-group>
       </n-space>
     </n-drawer-content>
