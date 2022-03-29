@@ -28,122 +28,26 @@ import {
 } from 'naive-ui'
 import { ArchiveOutline as ArchiveIcon } from '@vicons/ionicons5'
 import { useRouter, useRoute } from 'vue-router'
-import { computed } from '@vue/reactivity'
+import { computed, reactive } from '@vue/reactivity'
+import type { InternalRowData, TableColumns } from 'naive-ui/lib/data-table/src/interface'
+import type { FileInfo } from 'naive-ui/lib/upload/src/interface'
+import { toString } from '../api/api'
+import { userApiMethods } from '../api/userApi'
+
 
 const router = useRouter()
-
-
-let apiCode = () => localStorage.getItem("x-api-code") || ""
-let backendBaseUri = "https://xlsx-collecter-api.imhcg.cn"
-let apiUris = {
-  "loginByAccount": "https://account.imhcg.cn/to/aae1cf3cb358fab3f0685775655dc000",
-  "getUserSheets": "/api/user/sheets",
-  "createSheetByXlsx": "/api/sheet/create",
-  importSubusersFormXlsx(sheet_id: string) {
-    return `/api/user/${sheet_id}/subusers/import`
-  }
-}
-let currentSheet = ref<Record<string, string>>({})
-
+let currentSheet = ref<InternalRowData>({})
 let sheets = ref<Record<string, string>[]>([])
-
-// 把一个值转为字符串，显得没有那么多类型错误
-function toString<T>(raw: T): string {
-  return String(raw)
-}
-
 const TableloadingStatus = ref(false)
-
-let apiMethods = {
-  resetLoginStatus() {
-    delete localStorage["x-api-code"]
-    location.assign(apiUris.loginByAccount)
-  },
-
-  request(method = "GET", url = "http://", body = undefined): Promise<Response> {
-    let headers: Record<string, string> = {
-      "x-api-code": apiCode() || "apiCode"
-    }
-    return fetch(url, {
-      method: method,
-      headers: headers,
-      body: body,
-      mode: "cors",
-    })
-  },
-  checkLocalApiCode() {
-    const route = useRoute()
-    if (route.query.code && route.query.code.length === 129) {
-      localStorage.setItem("x-api-code", toString(route.query.code))
-    } else {
-      if (apiCode() == "") {
-        location.assign(apiUris.loginByAccount)
-      }
-    }
-  },
-  createSheetByXlsx(body: any, callback: Function) {
-    this.request("POST", backendBaseUri + apiUris.createSheetByXlsx, body).then(
-      (resp) => {
-        if (resp.status === 200) {
-          callback(true)
-        } else {
-          callback(false)
-        }
-      }
-    )
-  },
-
-  createSubUserByXlsx(body: any, callback: Function) {
-
-    this.request("POST", backendBaseUri + apiUris.importSubusersFormXlsx(currentSheet.value.id), body).then(
-      (resp) => {
-        if (resp.status === 200) {
-          callback(true)
-        } else {
-          callback(false)
-        }
-      }
-    )
-  },
-  getUserSheets() {
-    TableloadingStatus.value = true
-    this.request("GET", backendBaseUri + apiUris.getUserSheets, undefined).then((resp) => {
-      if (resp.status != 200) {
-        TableloadingStatus.value = false
-        apiMethods.resetLoginStatus()
-        return
-      } else {
-        resp.json().then((data) => {
-          sheets.value = []
-          Object.keys(data).forEach((id) => {
-            sheets.value.push({
-              "id": id,
-              "title": data[id]["title"],
-              "create_at": data[id]["create_at"]
-            })
-          })
-          TableloadingStatus.value = false
-        })
-      }
-
-    })
-  },
-}
-
-
-
-
-
 let createSheetDrawerVisible = ref(false)
 let importSubUserDrawerVisible = ref(false)
 
 
-
-const columns = [
+const tableColumns: TableColumns = [
   {
     title: '名称',
     key: 'title',
-    render(row: Record<string, string>) {
+    render(rowData: InternalRowData, rowIndex: number) {
       return h(
         NButton,
         {
@@ -151,9 +55,9 @@ const columns = [
           secondary: true,
           size: 'medium',
           type: "info",
-          onClick: () => router.push("/sheet?sheet_id=" + row.id)
+          onClick: () => router.push("/sheet?sheet_id=" + rowData.id)
         },
-        { default: () => row.title }
+        { default: () => rowData.title }
       )
     }
   },
@@ -164,11 +68,12 @@ const columns = [
   {
     title: '创建时间',
     key: 'create_at',
-    render(row) {
+    render(rowData: InternalRowData, rowIndex: number) {
       return h(
         NTime,
         {
-          time: row.create_at,
+          type: "datetime",
+          time: rowData.create_at as number,
           format: "yyyy-MM-dd HH:mm:ss",
           // unix: true,
         }
@@ -177,7 +82,8 @@ const columns = [
   },
   {
     title: '操作',
-    render(row) {
+    key: "操作",
+    render(rowData: InternalRowData, rowIndex: number) {
       return h(
         NButton,
         {
@@ -186,7 +92,8 @@ const columns = [
           size: 'medium',
           type: "info",
           onClick: () => {
-            currentSheet.value = row
+            currentSheet.value = rowData
+            console.log(currentSheet)
             importSubUserDrawerVisible.value = true
           }
         },
@@ -197,25 +104,30 @@ const columns = [
 ]
 
 const newSheetTitle = ref("")
-
-
 const message = useMessage()
 
-function handleFile(file, filelist, e) {
+interface handleFile {
+  file: FileInfo;
+  fileList: FileInfo[];
+  event: ProgressEvent | Event | undefined;
+}
+
+function handleFile(dataIncome: handleFile) {
+  let file = dataIncome.file
   console.log(newSheetTitle)
   if (newSheetTitle.value == "") {
     message.warning("请填写标题")
     return
   }
-  console.log(file, filelist, e)
+  console.log(file)
   var data = new FormData()
-  data.append('file', file.file.file)
+  data.append('file', file?.file as Blob)
   data.append('title', newSheetTitle.value)
-  apiMethods.createSheetByXlsx(data, (ok: boolean) => {
+  userApiMethods.createSheetByXlsx(data, (ok: boolean) => {
 
     if (ok) {
       message.success("新建成功");
-      apiMethods.getUserSheets()
+      userApiMethods.getUserSheets(TableloadingStatus, sheets)
       createSheetDrawerVisible.value = !createSheetDrawerVisible.value
     } else {
       message.warning("新建失败 请联系管理员")
@@ -228,12 +140,12 @@ function handleFile(file, filelist, e) {
 
 
 
-function handleSubUserFile(file, filelist, e) {
-
-  console.log(file, filelist, e)
+function handleSubUserFile(dataIncome: handleFile) {
+  let file = dataIncome.file
+  console.log(file)
   var data = new FormData()
-  data.append('file', file.file.file)
-  apiMethods.createSubUserByXlsx(data, (ok: boolean) => {
+  data.append('file', file?.file as Blob)
+  userApiMethods.createSubUserByXlsx(currentSheet.value, data, (ok: boolean) => {
     if (ok) {
       message.success("导入成功");
       importSubUserDrawerVisible.value = false
@@ -248,8 +160,8 @@ function handleSubUserFile(file, filelist, e) {
 
 onMounted(() => {
   console.log("UserView onMounted")
-  apiMethods.checkLocalApiCode()
-  apiMethods.getUserSheets()
+  userApiMethods.checkLocalApiCode()
+  userApiMethods.getUserSheets(TableloadingStatus, sheets)
 })
 
 </script>
@@ -262,7 +174,7 @@ onMounted(() => {
       </n-button-group>
 
       <n-layout-content v-if="sheets.length">
-        <n-data-table :columns="columns" :data="sheets" :loading="TableloadingStatus" />
+        <n-data-table :columns="tableColumns" :data="sheets" :loading="TableloadingStatus" />
       </n-layout-content>
 
       <n-drawer v-model:show="createSheetDrawerVisible" :width="600">
@@ -328,8 +240,6 @@ onMounted(() => {
       <n-drawer v-model:show="importSubUserDrawerVisible" :width="600">
         <n-drawer-content :title="'导入用户至 ' + currentSheet.title" closable>
           <n-space vertical>
-            
-
             <n-upload :on-change="handleSubUserFile" :default-upload="false" accept=".xlsx">
               <n-upload-dragger>
                 <div style="margin-bottom: 12px">
