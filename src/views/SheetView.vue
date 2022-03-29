@@ -80,6 +80,7 @@ let visible = ref({
 })
 
 let drawerTitle = ref("")
+const TableloadingStatus = ref(false)
 
 const router = useRouter()
 const message = useMessage()
@@ -96,7 +97,7 @@ let apiMethods = {
 
   request(method: string = "GET", url: string = "http://", body: any = undefined, content_type: string = "application/json") {
     let headers: Record<string, string> = {
-      "x-api-code": apiCode(),
+      "x-api-subuser-code": apiCode(),
       "content-type": content_type
     }
 
@@ -146,14 +147,17 @@ let apiMethods = {
 
 
   getSubUserRows() {
+    TableloadingStatus.value = true
     apiMethods.request("GET", backendBaseUri + uri.getRowsFromDb(sheetId.value), undefined).then((resp) => {
       if (resp.status != 200) {
+        TableloadingStatus.value = false
         apiMethods.resetLoginStatus()
         return
       } else {
         resp.json().then((data) => {
           console.log("getSubUserRows", data)
           rawRows.value = data
+          TableloadingStatus.value = false
         })
       }
     })
@@ -474,8 +478,8 @@ onMounted(() => {
         </n-button-group>
       </n-space>
 
-      <n-layout-content>
-        <n-data-table :columns="tableColumns" :data="rawRows" />
+      <n-layout-content v-if="rawRows.length">
+        <n-data-table :columns="tableColumns" :data="rawRows" :loading="TableloadingStatus" />
       </n-layout-content>
     </n-layout>
   </n-space>
