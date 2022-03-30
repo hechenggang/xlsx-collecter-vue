@@ -13,7 +13,10 @@ let userApiUris = {
   "createSheetByXlsx": "/api/sheet/create",
   importSubusersFormXlsx(sheet_id: string|unknown) {
     return `/api/user/${sheet_id}/subusers/import`
-  }
+  },
+  deleteSheet(sheet_id: string) {
+    return `/api/sheet/${sheet_id}/delete`
+  },
 }
 
 let userApiMethods = {
@@ -37,6 +40,8 @@ let userApiMethods = {
     const route = useRoute()
     if (route.query.code && route.query.code.length === 129) {
       localStorage.setItem("x-api-code", toString(route.query.code))
+      location.assign("/#/")
+      
     } else {
       if (apiCode() == "") {
         location.assign(userApiUris.loginByAccount)
@@ -45,6 +50,18 @@ let userApiMethods = {
   },
   createSheetByXlsx(body: any, callback: Function) {
     this.request("POST", backendBaseUri + userApiUris.createSheetByXlsx, body).then(
+      (resp) => {
+        if (resp.status === 200) {
+          callback(true)
+        } else {
+          callback(false)
+        }
+      }
+    )
+  },
+
+  deleteSheet(currentRow: Ref, callback: Function) {
+    this.request("POST", backendBaseUri + userApiUris.deleteSheet(currentRow.value.id), undefined).then(
       (resp) => {
         if (resp.status === 200) {
           callback(true)

@@ -33,6 +33,7 @@ import type { InternalRowData, TableColumns } from 'naive-ui/lib/data-table/src/
 import type { FileInfo } from 'naive-ui/lib/upload/src/interface'
 import { toString } from '../api/api'
 import { userApiMethods } from '../api/userApi'
+import { el } from 'date-fns/locale'
 
 
 const router = useRouter()
@@ -81,8 +82,8 @@ const tableColumns: TableColumns = [
     }
   },
   {
-    title: '操作',
-    key: "操作",
+    title: '导入成员',
+    key: "导入成员",
     render(rowData: InternalRowData, rowIndex: number) {
       return h(
         NButton,
@@ -97,7 +98,40 @@ const tableColumns: TableColumns = [
             importSubUserDrawerVisible.value = true
           }
         },
-        { default: () => "导入数据录入员" }
+        { default: () => "导入成员" }
+      )
+    }
+  },
+  {
+    title: '删除表单',
+    key: "删除表单",
+    render(rowData: InternalRowData, rowIndex: number) {
+      return h(
+        NButton,
+        {
+          strong: true,
+          secondary: true,
+          size: 'medium',
+          type: "error",
+          onClick: () => {
+            currentSheet.value = rowData
+            console.log(currentSheet)
+            let ok = confirm("确认要删除这个表单吗？\n相关数据全都会被删除且无法恢复")
+            if (ok) {
+              userApiMethods.deleteSheet(currentSheet, (ok) => {
+                if (ok) {
+                  message.warning("删除成功")
+                  userApiMethods.getUserSheets(TableloadingStatus,sheets)
+                } else {
+                  message.info("删除失败 请联系管理员")
+                }
+              })
+            }else{
+              message.info("删除操作已取消")
+            }
+          }
+        },
+        { default: () => "删除表单" }
       )
     }
   }
@@ -156,7 +190,9 @@ function handleSubUserFile(dataIncome: handleFile) {
   })
 }
 
-
+function logout() {
+  userApiMethods.resetLoginStatus()
+}
 
 onMounted(() => {
   console.log("UserView onMounted")
@@ -169,9 +205,20 @@ onMounted(() => {
 <template>
   <n-space vertical size="large">
     <n-layout content-style="padding: 24px;">
-      <n-button-group style="margin-bottom: 12px;">
-        <n-button @click="createSheetDrawerVisible = !createSheetDrawerVisible">新建表单</n-button>
-      </n-button-group>
+      <n-space justify="space-between">
+        <n-button-group style="margin-bottom: 12px;">
+          <n-button
+            @click="createSheetDrawerVisible = !createSheetDrawerVisible"
+            strong
+            secondary
+            type="info"
+          >新建表单</n-button>
+        </n-button-group>
+
+        <n-button-group style="margin-bottom: 12px;">
+          <n-button @click="logout" strong secondary type="error">注销</n-button>
+        </n-button-group>
+      </n-space>
 
       <n-layout-content v-if="sheets.length">
         <n-data-table :columns="tableColumns" :data="sheets" :loading="TableloadingStatus" />
@@ -205,9 +252,9 @@ onMounted(() => {
                 href="../assets/示例-信息采集表.xlsx"
                 target="_blank"
                 type="primary"
-              >点此下载模板</n-button>。
+              >点此下载模板</n-button>，略览模板内的数据标签用法后再继续。
               <br />第二步，使用形如
-              <code>input:int->B3</code>的数据标签来标记你需要采集的数据。
+              <code>input:int->B3</code>的数据标签来在你自己的表格内标记需要采集的数据。
               这里的
               <code>input:</code>是固定开头。
               <code>int->B3</code>说明这里需要一个
@@ -229,8 +276,9 @@ onMounted(() => {
               <code>姓名</code>是文字。
               同类的标签还有
               <code>int 整数、float 小数</code>。
-              <br />第三步，在此页面点击下面的上传按钮，上传你编辑好的模板。
-              完成上传后，你就可以在网页上完成数据的采集，而不是通过 Excel。
+              <br />第三步，在此页面点击下面的上传按钮，上传你编辑好的
+              <code>.xlsx</code>采集表。
+              完成上传后，传统表格将会转换为网页表单，便于在网页上完成数据的采集，而不是通过 Excel 等传统软件。
               <br />
             </n-card>
           </n-space>

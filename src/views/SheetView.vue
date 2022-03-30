@@ -32,7 +32,7 @@ import type { FormInst } from 'naive-ui'
 
 import { ArchiveOutline as ArchiveIcon } from '@vicons/ionicons5'
 import { useRouter, useRoute } from 'vue-router'
-import type { InternalRowData, TableColumns } from 'naive-ui/lib/data-table/src/interface'
+import type { InternalRowData, OnUpdateCheckedRowKeys, RowKey, TableColumns } from 'naive-ui/lib/data-table/src/interface'
 
 import { sheetApiMethods, apiCode } from "../api/sheetApi";
 
@@ -57,6 +57,7 @@ let drawerTitle = ref("")
 const TableloadingStatus = ref(false)
 const router = useRouter()
 const message = useMessage()
+const tableSelectedRowKeys = ref<RowKey[]>([])
 
 
 
@@ -81,7 +82,7 @@ function handleValidateClick(e: MouseEvent) {
   handleValidateLoading.value = true
   formRef.value?.validate((errors) => {
     if (!errors) {
-      console.log("尝试登录")
+      console.log("handleValidateClick", "尝试登录")
       const result = sheetApiMethods.sheetSubuserLogin(sheetId, subUser, (ok: boolean) => {
         if (ok) {
           message.success('登录成功')
@@ -98,7 +99,7 @@ function handleValidateClick(e: MouseEvent) {
       })
 
     } else {
-      console.log(errors)
+      console.log("handleValidateClick", errors)
       handleValidateLoading.value = false
       message.error('请完善登录信息')
     }
@@ -152,12 +153,64 @@ function saveRow() {
 }
 
 
+
+function handleTableRowsCheck(rowKeys: RowKey[]) {
+  tableSelectedRowKeys.value = rowKeys
+  console.log("handleTableRowsCheck", tableSelectedRowKeys.value)
+}
+
+
+function onDeleteRowsClick() {
+  let ok = confirm("确认要批量删除这些数据吗？\n相关数据全都会被删除且无法恢复")
+  if (ok) {
+    TableloadingStatus.value = true
+    sheetApiMethods.deleteRows(sheetId, tableSelectedRowKeys, (ok: boolean) => {
+      if (ok) {
+        message.success('批量删除成功')
+        sheetApiMethods.getSubUserRows(TableloadingStatus, sheetId, rawRows, visible)
+        tableSelectedRowKeys.value = []
+        TableloadingStatus.value = false
+      } else {
+        TableloadingStatus.value = false
+        message.error('批量删除失败 请联系管理员')
+      }
+    })
+  } else {
+    message.info("批量删除操作已取消")
+  }
+}
+
+
+function onOutputRowsClick() {
+  let ok = confirm("确认要批量导出这些数据吗？")
+  if (ok) {
+    TableloadingStatus.value = true
+    sheetApiMethods.outputRows(sheetId, tableSelectedRowKeys, (ok: boolean) => {
+      if (ok) {
+        message.success('批量导出成功')
+        TableloadingStatus.value = false
+
+
+      } else {
+        message.error('批量导出失败 请联系管理员')
+        TableloadingStatus.value = false
+
+      }
+    })
+  } else {
+    message.info("批量导出操作已取消")
+    TableloadingStatus.value = false
+
+  }
+}
+
+
 function logout() {
   sheetApiMethods.resetLoginStatus(visible)
 }
 
 onMounted(() => {
-  console.log("onMounted")
+  console.log("SheetView onMounted")
   sheetApiMethods.checkSheetIdAndApiCode(sheetId, rawColumns, drawerColumns, tableColumns, currentRow, drawerTitle, visible, TableloadingStatus, rawRows)
 })
 
@@ -202,7 +255,23 @@ onMounted(() => {
     <n-layout content-style="padding: 24px;">
       <n-space justify="space-between">
         <n-button-group style="margin-bottom: 12px;">
-          <n-button @click="onInsertRowClick" strong secondary type="info">新增数据</n-button>
+          <n-space>
+            <n-button @click="onInsertRowClick" strong secondary type="info">新增数据</n-button>
+            <n-button
+              @click="onOutputRowsClick"
+              strong
+              secondary
+              type="info"
+              v-if="tableSelectedRowKeys.length > 1"
+            >导出这 {{ tableSelectedRowKeys.length }} 项</n-button>
+            <n-button
+              @click="onDeleteRowsClick"
+              strong
+              secondary
+              v-if="tableSelectedRowKeys.length > 1"
+              type="error"
+            >删除这 {{ tableSelectedRowKeys.length }} 项</n-button>
+          </n-space>
         </n-button-group>
 
         <n-button-group style="margin-bottom: 12px;">
@@ -211,7 +280,13 @@ onMounted(() => {
       </n-space>
 
       <n-layout-content v-if="rawRows.length">
-        <n-data-table :columns="tableColumns" :data="rawRows" :loading="TableloadingStatus" />
+        <n-data-table
+          :row-key="row => row.rowid"
+          @update:checked-row-keys="handleTableRowsCheck"
+          :columns="tableColumns"
+          :data="rawRows"
+          :loading="TableloadingStatus"
+        />
       </n-layout-content>
     </n-layout>
   </n-space>

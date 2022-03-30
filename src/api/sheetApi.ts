@@ -36,8 +36,14 @@ const uri = {
   deleteRowFromDb(sheet_id: string, row_id: string | unknown) {
     return `/api/sheet/${sheet_id}/row/${row_id}/delete`
   },
+  deleteRowsFromDb(sheet_id: string) {
+    return `/api/sheet/${sheet_id}/rows/delete`
+  },
   outputToXlsxFile(sheet_id: string, row_id: string | unknown) {
     return `/api/sheet/${sheet_id}/rows/${row_id}/xlsx`
+  },
+  outputRowsToXlsx(sheet_id: string) {
+    return `/api/sheet/${sheet_id}/rows/xlsx`
   }
 
 }
@@ -146,8 +152,10 @@ let sheetApiMethods = {
           // 整理原始字段为 naive-ui Table 接受的字段
           // temp 装着 key 和 title 字段，用于 naiveui 生成表头
           let temp: any[] = []
+          temp.push({
+            "type": "selection",
+          })
           // temp2 多一个 type 字段，用于弹出框内的输入校验
-
           let temp2: any[] = []
           Object.keys(data).forEach((key) => {
             temp.push({
@@ -228,7 +236,7 @@ let sheetApiMethods = {
                   }
                 },
 
-                { default: () => "To Xlsx" }
+                { default: () => "导出" }
               )
 
               btns.push([editButton, deleteButton, outputXlsxButton])
@@ -280,10 +288,21 @@ let sheetApiMethods = {
     })
   },
 
-  outputToXlsxFile(sheetId: Ref, currentRow: Ref,) {
-    sheetApiMethods.request("GET", backendBaseUri + uri.outputToXlsxFile(sheetId.value, currentRow.value.rowid), undefined, "application/json").then((resp) => {
+  deleteRows(sheetId: Ref,tableSelectedRowKeys:Ref , callback: Function) {
+    sheetApiMethods.request("POST", backendBaseUri + uri.deleteRowsFromDb(sheetId.value), JSON.stringify(tableSelectedRowKeys.value), "application/json").then((resp) => {
       if (resp.status == 200) {
-        // let blob = new Blob([resp.blob()], {type: resp.headers["content-type"]});
+        callback(true)
+      } else {
+        callback(false)
+      }
+    })
+  },
+
+
+
+  outputToXlsxFile(sheetId: Ref, currentRow: Ref) {
+    sheetApiMethods.request("GET", backendBaseUri + uri.outputToXlsxFile(sheetId.value,currentRow.value.rowid),undefined, "application/json").then((resp) => {
+      if (resp.status == 200) {
         resp.blob().then((blob) => {
           let objectUrl = URL.createObjectURL(blob);
           let link = document.createElement('a');
@@ -296,6 +315,30 @@ let sheetApiMethods = {
         })
 
       }
+    })
+  },
+
+  
+  outputRows(sheetId: Ref,tableSelectedRowKeys:Ref,callback:Function) {
+    sheetApiMethods.request("POST", backendBaseUri + uri.outputRowsToXlsx(sheetId.value), JSON.stringify(tableSelectedRowKeys.value), "application/json").then((resp) => {
+      if (resp.status == 200) {
+        callback(true)
+        resp.blob().then((blob) => {
+          let objectUrl = URL.createObjectURL(blob);
+          let link = document.createElement('a');
+          link.style.display = "none";
+          link.href = objectUrl;
+          
+          link.download = '批量导出数据-' + new Date().getTime() + '.zip';
+          link.click();
+          URL.revokeObjectURL(objectUrl);
+          document.body.removeChild(link);
+          
+        })}
+        else{
+          callback(false)
+        }
+
     })
   },
 
