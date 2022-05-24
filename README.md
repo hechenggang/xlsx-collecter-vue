@@ -5,3 +5,5 @@
 
 ## Demo
 [简单表单](https://xlsx-collecter.imhcg.cn/)
+测试账号 hochenggang@gmail.com
+测试密码 abc123
